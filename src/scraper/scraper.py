@@ -1,16 +1,14 @@
-import re
 import asyncio
 import base64
-import json
-from time import sleep
-from playwright.async_api import Playwright, async_playwright
-from playwright_stealth import Stealth
+from browser import BrowserManager
+
 
 async def scrollAndClick(element) -> None:
     await element.scroll_into_view_if_needed()
     await element.hover()
     await asyncio.sleep(0.2)
     await element.click()
+
 
 async def search(page, searchString: str) -> None:
     # Acha e clica no botao pessoa fisica e juridica (clica na div pai pois o botao ta hidden)
@@ -38,6 +36,7 @@ async def search(page, searchString: str) -> None:
     await searchInput.press("Enter")
     return
 
+
 async def getBenefitTable(benefit_item, page) -> list:
     goToDetailsBtn = benefit_item.locator("#btnDetalharBpc")
     await scrollAndClick(goToDetailsBtn)
@@ -57,7 +56,6 @@ async def getBenefitTable(benefit_item, page) -> list:
     rows = table.locator("tr")
     await rows.first.wait_for(state="visible", timeout=5000)
     n_rows = await rows.count()
-
 
     # Associa os elementos as respectivas colunas e salva na lista
     benefit_table = []
@@ -92,14 +90,13 @@ async def parsePage(page) -> dict:
     while isActive is None:
         await scrollAndClick(filterAcc)
         isActive = await chevDown.get_attribute("active")
-    
+
     # Tira o print da janela
-    await page.screenshot(path="screenshot.png")
     screenshot_bytes = await page.screenshot()
-    screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+    screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
     # Parse data
-    #Nome
+    # Nome
     divName = page.locator("strong:has-text('Nome')").locator("xpath=..").first
     spanName = divName.locator("span")
     textName = await spanName.inner_text()
@@ -108,7 +105,7 @@ async def parsePage(page) -> dict:
     divCPF = page.locator("strong:has-text('CPF')").locator("xpath=..").first
     spanCPF = divCPF.locator("span")
     textCPF = await spanCPF.inner_text()
-    
+
     # Local
     divLocal = page.locator("strong:has-text('Localidade')").locator("xpath=..").first
     spanLocal = divLocal.locator("span")
@@ -118,23 +115,20 @@ async def parsePage(page) -> dict:
     table = page.locator(".br-table")
     n_elements = await table.count()
     benefits = []
-    await asyncio.sleep(10)
     for i in range(n_elements):
         table_item = table.nth(i)
- 
+
         auxType = await table_item.locator("strong").first.inner_text()
 
         amount = table_item.locator("text=R$").first
         amountText = await amount.inner_text()
-        parsedAmount = amountText.replace(".","").replace(",", ".")
+        parsedAmount = amountText.replace(".", "").replace(",", ".")
 
         bf_table = await getBenefitTable(table_item, page)
 
-        benefits.append({
-            "name": auxType,
-            "totalAmount": parsedAmount,
-            "details": bf_table
-        })
+        benefits.append(
+            {"name": auxType, "totalAmount": parsedAmount, "details": bf_table}
+        )
 
     data = {
         "name": textName,
@@ -143,22 +137,14 @@ async def parsePage(page) -> dict:
         "benefits": benefits,
     }
 
-    data['screenshot'] = screenshot_b64
+    data["screenshot"] = screenshot_b64
     return data
 
-async def scrap(playwright: Playwright, searchString: str) -> dict:
-    # Abrindo o browser
-    context = await playwright.chromium.launch_persistent_context(
-    "./user_data",
-    headless=True,
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    viewport={"width": 1920, "height": 1080},
-    args=[
-        "--disable-blink-features=AutomationControlled"
-        ]
-    )
 
-    page = await context.new_page()
+async def scrape(browser, searchString: str) -> dict:
+    # Abrindo o browser
+
+    page = await browser.newPage()
 
     # Poderia ir direto para https://portaldatransparencia.gov.br/pessoa-fisica/busca/lista porem especificação nao deixa claro
     await page.goto("https://portaldatransparencia.gov.br/")
@@ -173,7 +159,10 @@ async def scrap(playwright: Playwright, searchString: str) -> dict:
     except TimeoutError:
         # Timeout
         print("Timeout: Results count did not appear.")
-        return {"sucess": False, "error": "Response time exceeded. Website may be unstable."}
+        return {
+            "sucess": False,
+            "error": "Response time exceeded. Website may be unstable.",
+        }
     except Exception as e:
         # Qualquer outro error
         print(f"Unexpected error: {e}")
@@ -182,26 +171,32 @@ async def scrap(playwright: Playwright, searchString: str) -> dict:
     numberOfResults = await countResults.inner_text()
 
     # Pega o primeiro resultado se ele existe
-    if numberOfResults == '0':
+    if numberOfResults == "0":
         # Retornar o json formatado para deixar a mensagem correta.
         if searchString.isnumeric():
-            data = {"error": "Não foi possível retornar os dados no tempo de resposta solicitado"}
+            data = {
+                "error": "Não foi possível retornar os dados no tempo de resposta solicitado"
+            }
         else:
-            data = {"error": f"Foram encontrados 0 resultados para o termo {searchString}"}
+            data = {
+                "error": f"Foram encontrados 0 resultados para o termo {searchString}"
+            }
         return data
 
     result = page.locator(".link-busca-nome").first
     await scrollAndClick(result)
 
     data = await parsePage(page)
-    json_data = json.dumps(data, indent=4, ensure_ascii=False)
-    print(json_data)
-    return json_data
-    await asyncio.sleep(4)
+    await page.close()
+    return data
+
 
 async def main() -> None:
-    async with Stealth().use_async(async_playwright()) as playwright:
-        result = await scrap(playwright, "Jose Carlos Jose")
+    browser = BrowserManager()
+    await browser.start()
+    test_call_result = await scrape(browser, "Maria")
+    print(test_call_result)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
