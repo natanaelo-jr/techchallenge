@@ -1,0 +1,26 @@
+# Byte-compiled arquivos (Python)
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+
+# Dados do Navegador (PESADO e contém dados sensíveis/sessões locais)
+# Você monta isso via volume no docker-compose, não deve embutir na imagem
+user_data/
+
+# Ambiente Virtual e Gerenciamento de Pacotes
+.venv/
+# Nota: o uv.lock pode ficar se você for usar o uv para instalar dentro do Docker,
+# mas geralmente ignoramos o cache local.
+
+# Docker e logs
+.dockerignore
+docker-compose.yaml
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Configurações de IDE
+.vscode/
+.idea/

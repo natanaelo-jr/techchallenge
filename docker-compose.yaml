@@ -4,6 +4,7 @@ services:
     container_name: scraper_api
     volumes:
       - ./user_data:/app/user_data
+      - .:/app:rw
     restart: always
     ports:
       - "8000:8000"
