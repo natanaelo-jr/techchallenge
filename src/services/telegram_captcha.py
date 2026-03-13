@@ -5,6 +5,12 @@ from dotenv import load_dotenv
 import os
 
 
+class CaptchaBypassError(Exception):
+    """Erro lançado quando o captcha não é resolvido, mas o scraper deve continuar."""
+
+    pass
+
+
 class TelegramCaptchaManager:
     def __init__(self):
         load_dotenv()
